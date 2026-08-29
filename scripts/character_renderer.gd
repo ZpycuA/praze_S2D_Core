@@ -52,14 +52,14 @@ func set_character(data: CharacterData) -> void:
 		return
 
 	# 当前 Shader 最多支持 2 层（后层 + 前层），取实际层数和 2 的最小值
-	var num_layers = min(character_data.views[0].layers.size(), 2)
+	var num_layers = mini(character_data.views[0].layers.size(), 2)
 
-	# 清空所有层的纹理槽位（5 个角度），先填充为透明占位纹理，避免 shader 出现调试颜色
+	# 清空所有层的纹理槽位（5 个角度）
 	for l in range(2):
 		for v in range(5):
-			_material.set_shader_parameter("layer_%d_tex_%d" % [l, v], _placeholder_tex)
+			_material.set_shader_parameter("layer_%d_tex_%d" % [l, v], null)
 
-	# 为每一层设置 depth / anchor（如果有），并把每个视图的纹理填进去
+	# 遍历每个视图，设置纹理
 	for view in character_data.views:
 		var view_index = angle_to_index(view.angle)
 		if view_index == -1:
@@ -69,20 +69,16 @@ func set_character(data: CharacterData) -> void:
 		for l in range(num_layers):
 			if l < view.layers.size():
 				var layer = view.layers[l]
-				# 只要有 layer 对象就设置对应 slot（覆盖占位纹理）
-				_material.set_shader_parameter("layer_%d_tex_%d" % [l, view_index], layer.texture if layer.texture != null else _placeholder_tex)
-				# depth / anchor 对每层而言是全局的——以最后一次设置为准（通常每层在所有 view 中 depth 相同）
+				_material.set_shader_parameter("layer_%d_tex_%d" % [l, view_index], layer.texture)
 				_material.set_shader_parameter("layer_%d_depth" % l, layer.depth)
 				_material.set_shader_parameter("layer_%d_anchor" % l, layer.anchor)
 
 	# 使用第一个视图的第一层纹理作为 Sprite2D 的占位纹理，确保正确的 UV 区域
-	if character_data.views[0].layers.size() > 0 and character_data.views[0].layers[0].texture != null:
+	if character_data.views[0].layers.size() > 0:
 		_sprite.texture = character_data.views[0].layers[0].texture
 	else:
-		# 如果没有任何纹理可用，使用透明占位纹理
-		_sprite.texture = _placeholder_tex
-		push_warning("CharacterRenderer: First view has no layers or texture; using transparent placeholder.")
-
+		push_warning("CharacterRenderer: First view has no layers.")
+	# 调试：打印每个视图的映射结果
 	# 调试：打印每个视图、每一层的映射和纹理状态
 	for view in character_data.views:
 		var idx = angle_to_index(view.angle)
@@ -136,40 +132,17 @@ func get_expression_strength() -> float:
 	return expression_strength
 
 
-## 获取 shader 当前参数（调试）
-func debug_print_shader_state():
-	if not _material: return
-	print("view_angle:", _material.get_shader_parameter("view_angle"))
-	print("parallax_strength:", _material.get_shader_parameter("parallax_strength"))
-	for l in range(2):
-		print("layer_%d_depth:" % l, _material.get_shader_parameter("layer_%d_depth" % l))
-		print("layer_%d_anchor:" % l, _material.get_shader_parameter("layer_%d_anchor" % l))
-
-
 ## 将角度值映射到纹理索引（0~4），无效角度返回 -1
 func angle_to_index(angle: float) -> int:
-	# 使用就近映射，避免严格的浮点相等判断导致槽位未被填充
-	var angles = [-90.0, -45.0, 0.0, 45.0, 90.0]
-	var best_idx = -1
-	var best_dist = 1e9
-	for i in range(angles.size()):
-		var d = abs(angle - angles[i])
-		if d < best_dist:
-			best_dist = d
-			best_idx = i
-	# 可调阈值：如果差距太大（例如用户给了异常角度），返回 -1；阈值设为 60°
-	if best_dist > 60.0:
+	if abs(angle - (-90.0)) < 0.1:
+		return 0
+	elif abs(angle - (-45.0)) < 0.1:
+		return 1
+	elif abs(angle - 0.0) < 0.1:
+		return 2
+	elif abs(angle - 45.0) < 0.1:
+		return 3
+	elif abs(angle - 90.0) < 0.1:
+		return 4
+	else:
 		return -1
-	return best_idx
-
-
-## 生成一个透明 1x1 的占位纹理，避免 shader 采样未绑定的 sampler 时出现调试色
-func _create_placeholder_texture() -> Texture2D:
-	var img = Image.new()
-	# 创建 RGBA8 格式的 1x1 图像
-	img.create(1, 1, false, Image.FORMAT_RGBA8)
-	img.lock()
-	img.set_pixel(0, 0, Color(0, 0, 0, 0))
-	img.unlock()
-	var tex = ImageTexture.create_from_image(img)
-	return tex
