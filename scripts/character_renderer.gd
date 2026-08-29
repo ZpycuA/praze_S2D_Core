@@ -136,21 +136,31 @@ func get_expression_strength() -> float:
 	return expression_strength
 
 
+## 获取 shader 当前参数（调试）
+func debug_print_shader_state():
+	if not _material: return
+	print("view_angle:", _material.get_shader_parameter("view_angle"))
+	print("parallax_strength:", _material.get_shader_parameter("parallax_strength"))
+	for l in range(2):
+		print("layer_%d_depth:" % l, _material.get_shader_parameter("layer_%d_depth" % l))
+		print("layer_%d_anchor:" % l, _material.get_shader_parameter("layer_%d_anchor" % l))
+
+
 ## 将角度值映射到纹理索引（0~4），无效角度返回 -1
 func angle_to_index(angle: float) -> int:
-	# 允许少量浮点容差
-	if abs(angle - (-90.0)) < 0.1:
-		return 0
-	elif abs(angle - (-45.0)) < 0.1:
-		return 1
-	elif abs(angle - 0.0) < 0.1:
-		return 2
-	elif abs(angle - 45.0) < 0.1:
-		return 3
-	elif abs(angle - 90.0) < 0.1:
-		return 4
-	else:
+	# 使用就近映射，避免严格的浮点相等判断导致槽位未被填充
+	var angles = [-90.0, -45.0, 0.0, 45.0, 90.0]
+	var best_idx = -1
+	var best_dist = 1e9
+	for i in range(angles.size()):
+		var d = abs(angle - angles[i])
+		if d < best_dist:
+			best_dist = d
+			best_idx = i
+	# 可调阈值：如果差距太大（例如用户给了异常角度），返回 -1；阈值设为 60°
+	if best_dist > 60.0:
 		return -1
+	return best_idx
 
 
 ## 生成一个透明 1x1 的占位纹理，避免 shader 采样未绑定的 sampler 时出现调试色
