@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://brp410e1hj1r1"]
+
+[ext_resource type="Script" uid="uid://bl5ub3buppmyt" path="res://scripts/main.gd" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://duh8hyp4h5efc" path="res://scripts/character_renderer.gd" id="3_h2yge"]
+
+[node name="Main" type="Node2D" unique_id=1505278439]
+script = ExtResource("1_ig7tw")
+
+[node name="CharacterRenderer" type="Node2D" parent="." unique_id=286773584]
+position = Vector2(748, 336)
+script = ExtResource("3_h2yge")
+
+[node name="Title" type="Label" parent="." unique_id=875439155]
+offset_left = 40.0
+offset_top = 32.0
+offset_right = 80.0
+offset_bottom = 55.0
+theme_override_font_sizes/font_size = 30
+text = "PRAZE S2D CORE ALPHA TEST
+AngleSlider"
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=430956186]
+
+[node name="AngleSlider" type="HSlider" parent="CanvasLayer" unique_id=1941545756]
+offset_left = 216.0
+offset_top = 96.0
+offset_right = 488.0
+offset_bottom = 112.0
+min_value = -90.0
+max_value = 90.0
