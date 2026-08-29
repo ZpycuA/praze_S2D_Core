@@ -15,6 +15,7 @@ extends Node2D
 
 var _sprite: Sprite2D
 var _material: ShaderMaterial
+var _placeholder_tex: Texture2D
 
 func _ready():
 	# 创建渲染载体
@@ -25,6 +26,9 @@ func _ready():
 	_material = ShaderMaterial.new()
 	_material.shader = preload("res://shaders/character_blend.gdshader")
 	_sprite.material = _material
+
+	# 创建并缓存透明占位纹理，防止 shader 采样到未赋值的 sampler 导致调试色
+	_placeholder_tex = _create_placeholder_texture()
 
 	# 设置全局 Shader 参数
 	_material.set_shader_parameter("parallax_strength", parallax_strength)
@@ -48,14 +52,14 @@ func set_character(data: CharacterData) -> void:
 		return
 
 	# 当前 Shader 最多支持 2 层（后层 + 前层），取实际层数和 2 的最小值
-	var num_layers = mini(character_data.views[0].layers.size(), 2)
+	var num_layers = min(character_data.views[0].layers.size(), 2)
 
-	# 清空所有层的纹理槽位（5 个角度）
+	# 清空所有层的纹理槽位（5 个角度），先填充为透明占位纹理，避免 shader 出现调试颜色
 	for l in range(2):
 		for v in range(5):
-			_material.set_shader_parameter("layer_%d_tex_%d" % [l, v], null)
+			_material.set_shader_parameter("layer_%d_tex_%d" % [l, v], _placeholder_tex)
 
-	# 遍历每个视图，设置纹理
+	# 为每一层设置 depth / anchor（如果有），并把每个视图的纹理填进去
 	for view in character_data.views:
 		var view_index = angle_to_index(view.angle)
 		if view_index == -1:
@@ -65,16 +69,20 @@ func set_character(data: CharacterData) -> void:
 		for l in range(num_layers):
 			if l < view.layers.size():
 				var layer = view.layers[l]
-				_material.set_shader_parameter("layer_%d_tex_%d" % [l, view_index], layer.texture)
+				# 只要有 layer 对象就设置对应 slot（覆盖占位纹理）
+				_material.set_shader_parameter("layer_%d_tex_%d" % [l, view_index], layer.texture if layer.texture != null else _placeholder_tex)
+				# depth / anchor 对每层而言是全局的——以最后一次设置为准（通常每层在所有 view 中 depth 相同）
 				_material.set_shader_parameter("layer_%d_depth" % l, layer.depth)
 				_material.set_shader_parameter("layer_%d_anchor" % l, layer.anchor)
 
 	# 使用第一个视图的第一层纹理作为 Sprite2D 的占位纹理，确保正确的 UV 区域
-	if character_data.views[0].layers.size() > 0:
+	if character_data.views[0].layers.size() > 0 and character_data.views[0].layers[0].texture != null:
 		_sprite.texture = character_data.views[0].layers[0].texture
 	else:
-		push_warning("CharacterRenderer: First view has no layers.")
-	# 调试：打印每个视图的映射结果
+		# 如果没有任何纹理可用，使用透明占位纹理
+		_sprite.texture = _placeholder_tex
+		push_warning("CharacterRenderer: First view has no layers or texture; using transparent placeholder.")
+
 	# 调试：打印每个视图、每一层的映射和纹理状态
 	for view in character_data.views:
 		var idx = angle_to_index(view.angle)
@@ -130,6 +138,7 @@ func get_expression_strength() -> float:
 
 ## 将角度值映射到纹理索引（0~4），无效角度返回 -1
 func angle_to_index(angle: float) -> int:
+	# 允许少量浮点容差
 	if abs(angle - (-90.0)) < 0.1:
 		return 0
 	elif abs(angle - (-45.0)) < 0.1:
@@ -142,3 +151,15 @@ func angle_to_index(angle: float) -> int:
 		return 4
 	else:
 		return -1
+
+
+## 生成一个透明 1x1 的占位纹理，避免 shader 采样未绑定的 sampler 时出现调试色
+func _create_placeholder_texture() -> Texture2D:
+	var img = Image.new()
+	# 创建 RGBA8 格式的 1x1 图像
+	img.create(1, 1, false, Image.FORMAT_RGBA8)
+	img.lock()
+	img.set_pixel(0, 0, Color(0, 0, 0, 0))
+	img.unlock()
+	var tex = ImageTexture.create_from_image(img)
+	return tex
