@@ -37,6 +37,9 @@ vec4 sample_view_5(sampler2D tex0, sampler2D tex1, sampler2D tex2,
     vec2 offset = vec2(angle * parallax_strength * depth, 0.0);
     vec2 final_uv = centered_uv + offset + anchor;
     
+    // 防止越界采样（到边界处 clamp）
+    final_uv = clamp(final_uv, vec2(0.0), vec2(1.0));
+    
     // 用区间判断替代 floor/ceil，避免边界精度问题
     vec4 color;
     if (float_index < 1.0) {
